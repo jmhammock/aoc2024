@@ -40,25 +40,35 @@ let update_trend ~prev ~curr =
   | _ -> None
 ;;
 
-let process_line line =
-  split_line line
-  |> List.fold
-       ~init:(Some { direction = NotDetermined; value = 0 })
-       ~f:(fun acc curr ->
-         match acc with
-         | None -> None
-         | Some { direction = NotDetermined; value = 0 } ->
-           Some { direction = NotDetermined; value = curr }
-         | Some prev ->
-           let current_trend = determine_trend ~prev:prev.value ~curr in
-           update_trend ~prev:acc ~curr:current_trend)
+let rec process_line ~orig_line ~line ~tries =
+  let remove_at_index idx = List.filteri ~f:(fun i _ -> i <> idx) orig_line in
+  let processed =
+    List.fold
+      ~init:(Some { direction = NotDetermined; value = 0 })
+      ~f:(fun acc curr ->
+        match acc with
+        | None -> None
+        | Some { direction = NotDetermined; value = 0 } ->
+          Some { direction = NotDetermined; value = curr }
+        | Some prev ->
+          let current_trend = determine_trend ~prev:prev.value ~curr in
+          update_trend ~prev:acc ~curr:current_trend)
+      line
+  in
+  match processed with
+  | None ->
+    if tries = List.length orig_line
+    then None
+    else process_line ~orig_line ~line:(remove_at_index tries) ~tries:(tries + 1)
+  | Some _ -> processed
 ;;
 
 let process_lines lines =
   List.fold
     ~init:0
     ~f:(fun acc line ->
-      match process_line line with
+      let split = split_line line in
+      match process_line ~orig_line:split ~line:split ~tries:0 with
       | None -> acc
       | Some _ -> acc + 1)
     lines
