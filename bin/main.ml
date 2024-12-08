@@ -5,26 +5,30 @@ type vect =
   ; row : int
   }
 
-let get_x_vectors matrix =
+let get_a_vectors matrix =
   matrix
   |> Array.concat_mapi ~f:(fun r row ->
     row
     |> Array.mapi ~f:(fun c col ->
-      if Char.equal col 'X' then Some { col = c; row = r } else None)
+      if Char.equal col 'A' then Some { col = c; row = r } else None)
     |> Array.filter_map ~f:Fn.id)
   |> Array.to_list
 ;;
 
-let search_vects ~vect ~scalars =
-  [ List.map scalars ~f:(fun x -> { vect with col = vect.col + x })
-  ; List.map scalars ~f:(fun x -> { vect with col = vect.col - x })
-  ; List.map scalars ~f:(fun x -> { vect with row = vect.row + x })
-  ; List.map scalars ~f:(fun x -> { vect with row = vect.row - x })
-  ; List.map scalars ~f:(fun x -> { col = vect.col + x; row = vect.row + x })
-  ; List.map scalars ~f:(fun x -> { col = vect.col - x; row = vect.row - x })
-  ; List.map scalars ~f:(fun x -> { col = vect.col - x; row = vect.row + x })
-  ; List.map scalars ~f:(fun x -> { col = vect.col + x; row = vect.row - x })
-  ]
+let search_vects ~vect =
+  let diag_forward =
+    [ { col = vect.col - 1; row = vect.row + 1 }
+    ; vect
+    ; { col = vect.col + 1; row = vect.row - 1 }
+    ]
+  in
+  let diag_backward =
+    [ { col = vect.col + 1; row = vect.row + 1 }
+    ; vect
+    ; { col = vect.col - 1; row = vect.row - 1 }
+    ]
+  in
+  [ diag_forward; List.rev diag_forward; diag_backward; List.rev diag_backward ]
 ;;
 
 let transform_vects ~search_vects ~matrix =
@@ -35,7 +39,7 @@ let transform_vects ~search_vects ~matrix =
 ;;
 
 let search ~matrix vect =
-  let search_vects = search_vects ~vect ~scalars:[ 1; 2; 3 ] in
+  let search_vects = search_vects ~vect in
   let search_strings = transform_vects ~search_vects ~matrix in
   List.filter_map
     ~f:(fun s -> if String.( = ) s "MAS" then Some vect else None)
@@ -57,10 +61,9 @@ let () =
   let matrix = array_of_list content in
   let seeker = search ~matrix in
   matrix
-  |> get_x_vectors
+  |> get_a_vectors
   |> List.map ~f:seeker
-  |> List.concat
-  |> List.length
+  |> List.fold ~init:0 ~f:(fun acc l -> if List.length l = 2 then acc + 1 else acc)
   |> Int.to_string
   |> print_endline
 ;;
