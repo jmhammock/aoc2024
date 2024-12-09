@@ -1,69 +1,69 @@
 open Core
 
-type vect =
-  { col : int
-  ; row : int
-  }
-
-let get_a_vectors matrix =
-  matrix
-  |> Array.concat_mapi ~f:(fun r row ->
-    row
-    |> Array.mapi ~f:(fun c col ->
-      if Char.equal col 'A' then Some { col = c; row = r } else None)
-    |> Array.filter_map ~f:Fn.id)
-  |> Array.to_list
-;;
-
-let search_vects ~vect =
-  let diag_forward =
-    [ { col = vect.col - 1; row = vect.row + 1 }
-    ; vect
-    ; { col = vect.col + 1; row = vect.row - 1 }
-    ]
-  in
-  let diag_backward =
-    [ { col = vect.col + 1; row = vect.row + 1 }
-    ; vect
-    ; { col = vect.col - 1; row = vect.row - 1 }
-    ]
-  in
-  [ diag_forward; List.rev diag_forward; diag_backward; List.rev diag_backward ]
-;;
-
-let transform_vects ~search_vects ~matrix =
-  let get_char vect = Option.try_with (fun () -> matrix.(vect.row).(vect.col)) in
-  search_vects
-  |> List.map ~f:(fun vl ->
-    vl |> List.filter_map ~f:(fun v -> get_char v) |> String.of_char_list)
-;;
-
-let search ~matrix vect =
-  let search_vects = search_vects ~vect in
-  let search_strings = transform_vects ~search_vects ~matrix in
-  List.filter_map
-    ~f:(fun s -> if String.( = ) s "MAS" then Some vect else None)
-    search_strings
-;;
-
 let read_file filename =
   In_channel.with_file filename ~f:(fun ic -> In_channel.input_lines ic)
 ;;
 
-let array_of_list list =
-  let rows = List.map ~f:(fun s -> String.to_list s |> Array.of_list) list in
-  Array.of_list rows
+let rules_map lines =
+  let update_rule ~map ~line =
+    match String.split ~on:'|' line with
+    | [ hd; tl ] ->
+      Map.update map hd ~f:(function
+        | Some v -> tl :: v
+        | None -> [ tl ])
+    | _ -> failwith "bad line"
+  in
+  List.fold
+    lines
+    ~init:(Map.empty (module String))
+    ~f:(fun map line -> update_rule ~map ~line)
+;;
+
+let lst_middle lst =
+  let rec find_middle slow fast =
+    match fast with
+    | [] | [ _ ] -> slow
+    | _ :: _ :: fast_tl -> find_middle (List.tl_exn slow) fast_tl
+  in
+  match lst with
+  | [] -> failwith "bad list"
+  | _ -> List.hd_exn (find_middle lst lst)
+;;
+
+let update_list lines = List.map lines ~f:(fun line -> String.split ~on:',' line)
+
+let intersect_updates l1 l2 =
+  List.filter l1 ~f:(fun x -> List.mem l2 x ~equal:String.( = ))
+;;
+
+let eval_pages ~page ~rules =
+  let rec aux result updates =
+    match result with
+    | None -> None
+    | Some _ ->
+      (match updates with
+       | [] | [ _ ] -> result
+       | hd :: tl ->
+         (match Map.find rules hd with
+          | None -> None
+          | Some order ->
+            let inter = intersect_updates order tl in
+            if List.length inter = List.length tl then aux (Some ()) tl else None))
+  in
+  match aux (Some ()) page with
+  | Some _ -> Some (lst_middle page)
+  | None -> None
 ;;
 
 let () =
-  let filename = "input/day4.txt" in
-  let content = read_file filename in
-  let matrix = array_of_list content in
-  let seeker = search ~matrix in
-  matrix
-  |> get_a_vectors
-  |> List.map ~f:seeker
-  |> List.fold ~init:0 ~f:(fun acc l -> if List.length l = 2 then acc + 1 else acc)
-  |> Int.to_string
-  |> print_endline
+  let rules_file = "input/day5rules.txt" in
+  let rules_content = read_file rules_file in
+  let updates_file = "input/day5updates.txt" in
+  let updates_content = read_file updates_file in
+  let rules = rules_map rules_content in
+  let updates = update_list updates_content in
+  List.filter_map updates ~f:(fun update -> eval_pages ~page:update ~rules)
+  |> List.map ~f:Int.of_string
+  |> List.fold ~init:0 ~f:( + )
+  |> printf "%d\n"
 ;;
